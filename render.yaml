@@ -3,10 +3,10 @@ services:
     name: tennis-bot
     env: python
     plan: free
-    buildCommand: ""
-    startCommand: python bot.py
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python bot.py"
     envVars:
       - key: BOT_TOKEN
-        value: seu_token_aqui
+        value: 7907745048:AAfge_Mi8bVZrbABRLiciQZDJD6pVeQev8
       - key: CHAT_ID
-        value: seu_chat_id_aqui
+        value: 1965666945
