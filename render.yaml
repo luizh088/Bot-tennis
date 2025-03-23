@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: tennis-bot
+    env: python
+    plan: free
+    buildCommand: ""
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        value: seu_token_aqui
+      - key: CHAT_ID
+        value: seu_chat_id_aqui
