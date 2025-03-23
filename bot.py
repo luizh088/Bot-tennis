@@ -13,4 +13,4 @@ def send_alert():
 
 while True:
     send_alert()
-    time.sleep(300)  # Espera 5 minutos (300 segundos)
+    time.sleep(15)  # Espera 5 minutos (300 segundos)
