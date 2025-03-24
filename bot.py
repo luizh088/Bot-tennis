@@ -3,12 +3,15 @@ import requests
 import time
 import re
 
+# Variáveis de ambiente para token e ID do chat
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
+# URL da API da Sofascore
 SOFASCORE_API_URL = "https://api.sofascore.com/api/v1/sport/tennis/events/live"
+
+# Memória para controle de alertas enviados
 alerted_games = set()
-game_state = {}
 
 def obter_jogos_ao_vivo():
     try:
@@ -28,15 +31,12 @@ def identificar_sacador(event):
 
         home_serving_first = first_to_serve == 1
 
-        # Soma todos os games dos dois jogadores em todos os sets
         total_games = 0
         for i in range(1, 6):
-            home_games = int(event["homeScore"].get(f"period{i}", 0))
-            away_games = int(event["awayScore"].get(f"period{i}", 0))
-            total_games += home_games + away_games
+            total_games += event["homeScore"].get(f"period{i}", 0)
+            total_games += event["awayScore"].get(f"period{i}", 0)
 
-        if (total_games % 2 == 0 and home_serving_first) or \
-           (total_games % 2 == 1 and not home_serving_first):
+        if (total_games % 2 == 0 and home_serving_first) or (total_games % 2 == 1 and not home_serving_first):
             return "home"
         else:
             return "away"
@@ -56,8 +56,8 @@ def formatar_set_e_game(event):
 
         home_games = event["homeScore"].get(f"period{period_index}", 0)
         away_games = event["awayScore"].get(f"period{period_index}", 0)
-
         game_atual = home_games + away_games + 1
+
         return f"{set_nome} - Game {game_atual}"
     except Exception as e:
         print(f"Erro ao formatar set/game: {e}")
@@ -85,7 +85,6 @@ def verificar_ponto_perdido(event):
 
     match = re.search(r"(\d+)", event.get("lastPeriod", "period1"))
     set_index = int(match.group(1)) if match else 1
-
     home_games = event["homeScore"].get(f"period{set_index}", 0)
     away_games = event["awayScore"].get(f"period{set_index}", 0)
     game_id = home_games + away_games + 1
@@ -94,52 +93,32 @@ def verificar_ponto_perdido(event):
     if game_key in alerted_games:
         return
 
-    server_name = event["homeTeam"]["name"] if server == "home" else event["awayTeam"]["name"]
-    opponent_name = event["awayTeam"]["name"] if server == "home" else event["homeTeam"]["name"]
-    home_score = event["homeScore"]["point"]
-    away_score = event["awayScore"]["point"]
-    set_info = formatar_set_e_game(event)
+    home_score = event["homeScore"].get("point", "")
+    away_score = event["awayScore"].get("point", "")
 
     if (server == "home" and home_score == "0" and away_score == "15") or \
        (server == "away" and away_score == "0" and home_score == "15"):
+
+        server_name = event["homeTeam"]["name"] if server == "home" else event["awayTeam"]["name"]
+        opponent_name = event["awayTeam"]["name"] if server == "home" else event["homeTeam"]["name"]
+        set_info = formatar_set_e_game(event)
+
         mensagem = (
-            f"🎾 *ALERTA*: {server_name} perdeu o *primeiro ponto no saque* contra {opponent_name}!\n"
-            f"🏆 Torneio: {event['tournament']['name']}\n"
-            f"📊 {set_info}\n"
-            f"🧮 Placar: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
+            f"\U0001F3BE *ALERTA*: {server_name} perdeu o *primeiro ponto no saque* contra {opponent_name}!\n"
+            f"\U0001F3C6 Torneio: {event['tournament']['name']}\n"
+            f"\U0001F4CA {set_info}\n"
+            f"\U0001FAEE Placar: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
         )
+
         enviar_mensagem_telegram(mensagem)
         alerted_games.add(game_key)
-        game_state[event_id] = {
-            "server": server,
-            "game_key": game_key,
-            "status": "alertado"
-        }
-
-def verificar_fim_game(event):
-    event_id = event["id"]
-    if event_id not in game_state:
-        return
-
-    info = game_state[event_id]
-    game_key = info.get("game_key")
-
-    home_point = event["homeScore"].get("point")
-    away_point = event["awayScore"].get("point")
-
-    # Se o placar não está mais em 0x15 ou 15x0, o primeiro ponto já passou
-    if not ((home_point == "0" and away_point == "15") or (home_point == "15" and away_point == "0")):
-        if game_key in alerted_games:
-            alerted_games.remove(game_key)
-        del game_state[event_id]
 
 def main():
-    print("Iniciando monitoramento dos jogos de tênis...")
+    print("Monitorando jogos de tênis ao vivo...")
     while True:
         eventos = obter_jogos_ao_vivo()
         for evento in eventos:
             verificar_ponto_perdido(evento)
-            verificar_fim_game(evento)
         time.sleep(1)
 
 if __name__ == "__main__":
