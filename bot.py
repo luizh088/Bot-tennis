@@ -23,18 +23,19 @@ def obter_jogos_ao_vivo():
 def identificar_sacador(event):
     try:
         first_to_serve = event.get("firstToServe")
-        if first_to_serve is None:
+        if first_to_serve not in [1, 2]:
             return None
 
         home_serving_first = first_to_serve == 1
 
+        # Soma total de games jogados nos sets (exclui tiebreaks)
         total_games = 0
-        for i in range(1, 6):  # até 5 sets
-            home_games = event["homeScore"].get(f"period{i}")
-            away_games = event["awayScore"].get(f"period{i}")
-            if home_games is not None and away_games is not None:
-                total_games += home_games + away_games
+        for i in range(1, 6):
+            home_games = event["homeScore"].get(f"period{i}", 0)
+            away_games = event["awayScore"].get(f"period{i}", 0)
+            total_games += home_games + away_games
 
+        # Alternância de saque com base na quantidade total de games
         if (total_games % 2 == 0 and home_serving_first) or \
            (total_games % 2 == 1 and not home_serving_first):
             return "home"
@@ -89,7 +90,7 @@ def verificar_ponto_perdido(event):
 
     home_games = event["homeScore"].get(f"period{set_index}", 0)
     away_games = event["awayScore"].get(f"period{set_index}", 0)
-    game_id = max(home_games + away_games - 1, 0)  # Ajuste crucial aqui
+    game_id = max(home_games + away_games - 1, 0)
     game_key = f"{event_id}-set{set_index}-game{game_id}-{server}"
 
     if game_key in alerted_games:
