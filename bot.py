@@ -1,46 +1,74 @@
 import os
-import requests
 import time
-import datetime
+import requests
+from datetime import datetime
 
-# Configurações iniciais
-API_URL = "https://api.exemplo.com/tennis/live"  # Substitua pela URL real da API de jogos ao vivo
-INTERVALO_VERIFICACAO = 300  # Intervalo de 5 minutos (300 segundos)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+API_URL = "https://api.sofascore.com/api/v1/sport/tennis/events/live"
 
-# Função para obter dados dos jogos ao vivo
+def send_message(text):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": text
+    }
+    try:
+        response = requests.post(url, data=payload)
+        print("Status do envio:", response.status_code)
+        print("Resposta da API:", response.text)
+    except Exception as e:
+        print(f"Erro ao enviar mensagem: {e}")
+
+def format_score(home_score, away_score):
+    sets = []
+    max_sets = max(len(home_score), len(away_score))
+    for i in range(max_sets):
+        h = home_score[i] if i < len(home_score) else ""
+        a = away_score[i] if i < len(away_score) else ""
+        sets.append(f"{h}-{a}")
+    return " | ".join(sets)
+
 def obter_jogos_ao_vivo():
     try:
         response = requests.get(API_URL)
-        if response.status_code == 200:
-            return response.json()  # Supondo que a API retorne JSON
-        elif response.status_code == 410:
-            print(f"Erro 410: O recurso solicitado foi removido permanentemente. URL: {API_URL}")
-            # Implementar lógica adicional, se necessário
-        else:
-            print(f"Erro ao obter jogos: {response.status_code}")
+        if response.status_code != 200:
+            print(f"Erro ao obter dados: {response.status_code}")
+            return
+
+        data = response.json()
+        eventos = data.get("events", [])
+
+        if not eventos:
+            agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"{agora}: Nenhum jogo ao vivo no momento.")
+            return
+
+        for evento in eventos:
+            try:
+                home = evento["homeTeam"]["shortName"]
+                away = evento["awayTeam"]["shortName"]
+                home_score = evento["homeScore"].get("periods", {})
+                away_score = evento["awayScore"].get("periods", {})
+
+                home_set_scores = [str(v) for k, v in sorted(home_score.items())]
+                away_set_scores = [str(v) for k, v in sorted(away_score.items())]
+
+                score_str = format_score(home_set_scores, away_set_scores)
+                mensagem = f"**AO VIVO**: {home} x {away}\nPlacar: {score_str}"
+                print(mensagem)
+                send_message(mensagem)
+
+            except Exception as e:
+                print(f"Erro ao processar evento: {e}")
+
     except Exception as e:
         print(f"Exceção ao obter jogos: {e}")
-    return []
 
-# Função para exibir os jogos ao vivo
-def exibir_jogos_ao_vivo(jogos):
-    if jogos:
-        print(f"\n{datetime.datetime.now()}: Jogos ao vivo no momento:")
-        for jogo in jogos:
-            jogador1 = jogo.get('jogador1', 'Desconhecido')
-            jogador2 = jogo.get('jogador2', 'Desconhecido')
-            placar = jogo.get('placar', 'N/D')  # Ajuste conforme a estrutura real dos dados
-            print(f"{jogador1} vs {jogador2} - Placar: {placar}")
-    else:
-        print(f"\n{datetime.datetime.now()}: Nenhum jogo ao vivo no momento.")
-
-# Função principal de monitoramento
-def monitorar_jogos():
+def main():
     while True:
-        jogos_ao_vivo = obter_jogos_ao_vivo()
-        exibir_jogos_ao_vivo(jogos_ao_vivo)
-        time.sleep(INTERVALO_VERIFICACAO)
+        obter_jogos_ao_vivo()
+        time.sleep(300)  # 5 minutos
 
-# Execução do monitoramento
 if __name__ == "__main__":
-    monitorar_jogos()
+    main()
