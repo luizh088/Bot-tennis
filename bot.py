@@ -28,13 +28,15 @@ def identificar_sacador(event):
 
         home_serving_first = first_to_serve == 1
 
+        # Soma todos os games jogados em todos os sets
         total_games = 0
-        home_games = event["homeScore"].get("games", [])
-        away_games = event["awayScore"].get("games", [])
+        for i in range(1, 6):  # até 5 sets
+            home_games = event["homeScore"].get(f"period{i}")
+            away_games = event["awayScore"].get(f"period{i}")
+            if home_games is not None and away_games is not None:
+                total_games += home_games + away_games
 
-        for h, a in zip(home_games, away_games):
-            total_games += h + a
-
+        # Define o sacador com base na ordem de saque e total de games jogados
         if (total_games % 2 == 0 and home_serving_first) or \
            (total_games % 2 == 1 and not home_serving_first):
             return "home"
@@ -46,25 +48,20 @@ def identificar_sacador(event):
 
 def formatar_set_e_game(event):
     try:
-        home_games = event["homeScore"].get("games", [])
-        away_games = event["awayScore"].get("games", [])
         last_period_raw = event.get("lastPeriod", "period1")
 
-        # Extrai número do set de strings como "period1", "period2", etc.
+        # Extrai número do set (ex: "period2" → 2)
         match = re.search(r"(\d+)", last_period_raw)
         if not match:
             return "Set desconhecido"
 
-        current_set_index = int(match.group(1)) - 1
-        set_numero = current_set_index + 1
-        set_nome = f"Set {set_numero}"
+        period_index = int(match.group(1))
+        set_nome = f"Set {period_index}"
 
-        # Soma dos games vencidos no set atual
-        home_set_games = home_games[current_set_index] if current_set_index < len(home_games) else 0
-        away_set_games = away_games[current_set_index] if current_set_index < len(away_games) else 0
+        home_games = event["homeScore"].get(f"period{period_index}", 0)
+        away_games = event["awayScore"].get(f"period{period_index}", 0)
 
-        # Game atual em andamento
-        game_atual = home_set_games + away_set_games + 1
+        game_atual = home_games + away_games + 1
         return f"{set_nome} - Game {game_atual}"
     except Exception as e:
         print(f"Erro ao formatar set/game: {e}")
