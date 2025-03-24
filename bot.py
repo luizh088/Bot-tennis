@@ -86,10 +86,11 @@ def verificar_ponto_perdido(event):
     # Geração de chave única confiável por game
     match = re.search(r"(\d+)", event.get("lastPeriod", "period1"))
     set_index = int(match.group(1)) if match else 1
+
     home_games = event["homeScore"].get(f"period{set_index}", 0)
     away_games = event["awayScore"].get(f"period{set_index}", 0)
-    game_number = home_games + away_games + 1
-    game_key = f"{event_id}-set{set_index}-game{game_number}-{server}"
+    game_id = home_games + away_games  # sem +1 para refletir o início do game
+    game_key = f"{event_id}-set{set_index}-game{game_id}-{server}"
 
     if game_key in alerted_games:
         return
