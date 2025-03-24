@@ -1,101 +1,113 @@
 import os
-import time
 import requests
+import time
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
-API_URL = "https://api.sofascore.com/api/v1/sport/tennis/events/live"
 
-# Guardar alertas já enviados
-alertas_enviados = {}
+SOFASCORE_API_URL = "https://api.sofascore.com/api/v1/sport/tennis/events/live"
+alerted_games = set()
+game_state = {}
 
-def enviar_mensagem(texto):
+def obter_jogos_ao_vivo():
+    try:
+        response = requests.get(SOFASCORE_API_URL)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("events", [])
+    except Exception as e:
+        print(f"Erro ao obter jogos: {e}")
+        return []
+
+def identificar_sacador(event):
+    try:
+        first_to_serve = event.get("firstToServe")
+        home_serving = first_to_serve == 1
+        home_point = int(event["homeScore"]["point"])
+        away_point = int(event["awayScore"]["point"])
+        total_points = home_point + away_point
+        if (total_points % 2 == 0 and home_serving) or (total_points % 2 == 1 and not home_serving):
+            return "home"
+        else:
+            return "away"
+    except Exception as e:
+        print(f"Erro ao identificar sacador: {e}")
+        return None
+
+def enviar_mensagem_telegram(mensagem):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
-        "text": texto,
+        "text": mensagem,
         "parse_mode": "Markdown"
     }
-    resposta = requests.post(url, json=payload)
-    print("Status do envio:", resposta.status_code)
-    print("Resposta da API:", resposta.text)
-
-def formatar_placar(home, away, game_score):
-    home_point = game_score.get("home", "")
-    away_point = game_score.get("away", "")
-    return f"{home} {home_point} x {away_point} {away}"
+    response = requests.post(url, json=payload)
+    print("Status do envio:", response.status_code)
+    print("Resposta da API:", response.text)
 
 def verificar_ponto_perdido(event):
     event_id = event["id"]
-    home = event["homeTeam"]["shortName"]
-    away = event["awayTeam"]["shortName"]
-    server = event.get("firstToServe", 1)  # 1 = home, 2 = away
-
-    home_point = event["homeScore"]["point"]
-    away_point = event["awayScore"]["point"]
-
-    game_key = f"{event_id}-{event['period']}-{server}"
-
-    # Verifica se já mandamos alerta pra esse game
-    if game_key in alertas_enviados:
+    server = identificar_sacador(event)
+    if not server:
         return
 
-    perdeu_saque = False
+    server_name = event["homeTeam"]["name"] if server == "home" else event["awayTeam"]["name"]
+    opponent_name = event["awayTeam"]["name"] if server == "home" else event["homeTeam"]["name"]
+    home_score = event["homeScore"]["point"]
+    away_score = event["awayScore"]["point"]
+    current_period = event.get("lastPeriod", "desconhecido")
 
-    # Sacador perdeu o primeiro ponto?
-    if server == 1 and home_point == "0" and away_point == "15":
-        perdeu_saque = True
-        sacador = home
-        adversario = away
-    elif server == 2 and away_point == "0" and home_point == "15":
-        perdeu_saque = True
-        sacador = away
-        adversario = home
-    else:
+    game_key = f"{event_id}-{current_period}-{server}"
+    if game_key in alerted_games:
         return
 
-    # Alerta novo
-    alertas_enviados[game_key] = True
+    if (server == "home" and home_score == "0" and away_score == "15") or \
+       (server == "away" and away_score == "0" and home_score == "15"):
+        mensagem = (
+            f"ALERTA: {server_name} perdeu o primeiro ponto no saque contra {opponent_name}!\n"
+            f"Torneio: {event['tournament']['name']}\n"
+            f"Set atual: {current_period}\n"
+            f"Placar atual: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
+        )
+        enviar_mensagem_telegram(mensagem)
+        alerted_games.add(game_key)
+        game_state[event_id] = {
+            "server": server,
+            "set": current_period,
+            "status": "alertado"
+        }
 
-    torneio = event["tournament"]["name"]
-    set_atual = event.get("lastPeriod", "Desconhecido")
-    placar_atual = formatar_placar(home, away, event["homeScore"]) if server == 1 else formatar_placar(home, away, event["awayScore"])
+def verificar_fim_game(event):
+    event_id = event["id"]
+    if event_id not in game_state:
+        return
 
-    texto = (
-        f"*ALERTA*: {sacador} perdeu o primeiro ponto no saque contra {adversario}!\n"
-        f"Torneio: {torneio}\n"
-        f"Set atual: {set_atual}\n"
-        f"Placar atual: {placar_atual}"
-    )
-    enviar_mensagem(texto)
+    info = game_state[event_id]
+    server = info["server"]
+    current_period = event.get("lastPeriod", "desconhecido")
+    home_score = event["homeScore"]["point"]
+    away_score = event["awayScore"]["point"]
 
-def mostrar_jogos_ao_vivo(events):
-    for event in events:
-        home = event["homeTeam"]["shortName"]
-        away = event["awayTeam"]["shortName"]
-        texto = f"**AO VIVO**: {home} x {away}\nPlacar: {formatar_placar(home, away, event['homeScore'])}"
-        enviar_mensagem(texto)
-
-def obter_jogos():
-    try:
-        resposta = requests.get(API_URL)
-        if resposta.status_code == 200:
-            return resposta.json().get("events", [])
-        else:
-            print("Erro ao obter jogos:", resposta.status_code)
-    except Exception as e:
-        print("Exceção ao obter jogos:", e)
-    return []
+    if home_score not in ["0", "15", "30", "40"] and away_score not in ["0", "15", "30", "40"]:
+        vencedor = event["homeTeam"]["name"] if home_score == "Game" else event["awayTeam"]["name"]
+        sacador = event["homeTeam"]["name"] if server == "home" else event["awayTeam"]["name"]
+        simbolo = "✅" if sacador == vencedor else "❌"
+        mensagem = (
+            f"Fim do game no set {current_period}!\n"
+            f"{sacador} sacou e {simbolo} ganhou o game!\n"
+            f"Placar: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
+        )
+        enviar_mensagem_telegram(mensagem)
+        del game_state[event_id]
 
 def main():
     print("Iniciando monitoramento dos jogos de tênis...")
     while True:
-        eventos = obter_jogos()
-        if not eventos:
-            print("Nenhum jogo ao vivo no momento.")
+        eventos = obter_jogos_ao_vivo()
         for evento in eventos:
             verificar_ponto_perdido(evento)
-        time.sleep(5)
+            verificar_fim_game(evento)
+        time.sleep(1)
 
 if __name__ == "__main__":
     main()
