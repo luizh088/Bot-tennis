@@ -27,7 +27,6 @@ def identificar_sacador(event):
 
         home_serving_first = first_to_serve == 1
 
-        # Soma o total de games jogados em todos os sets
         total_games = 0
         home_games = event["homeScore"].get("games", [])
         away_games = event["awayScore"].get("games", [])
@@ -35,7 +34,6 @@ def identificar_sacador(event):
         for h, a in zip(home_games, away_games):
             total_games += h + a
 
-        # Se o número total de games é par → sacador é quem começou servindo
         if (total_games % 2 == 0 and home_serving_first) or \
            (total_games % 2 == 1 and not home_serving_first):
             return "home"
@@ -44,6 +42,24 @@ def identificar_sacador(event):
     except Exception as e:
         print(f"Erro ao identificar sacador: {e}")
         return None
+
+def formatar_set_e_game(event):
+    try:
+        home_games = event["homeScore"].get("games", [])
+        away_games = event["awayScore"].get("games", [])
+        current_set_index = int(event.get("lastPeriod", 1)) - 1
+
+        set_numero = current_set_index + 1
+        set_nome = f"Set {set_numero}"
+
+        home_set_games = home_games[current_set_index] if current_set_index < len(home_games) else 0
+        away_set_games = away_games[current_set_index] if current_set_index < len(away_games) else 0
+
+        game_atual = home_set_games + away_set_games + 1
+        return f"{set_nome} - Game {game_atual}"
+    except Exception as e:
+        print(f"Erro ao formatar set/game: {e}")
+        return "Set desconhecido"
 
 def enviar_mensagem_telegram(mensagem):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -69,9 +85,9 @@ def verificar_ponto_perdido(event):
     opponent_name = event["awayTeam"]["name"] if server == "home" else event["homeTeam"]["name"]
     home_score = event["homeScore"]["point"]
     away_score = event["awayScore"]["point"]
-    current_period = event.get("lastPeriod", "desconhecido")
+    set_info = formatar_set_e_game(event)
 
-    game_key = f"{event_id}-{current_period}-{server}"
+    game_key = f"{event_id}-{set_info}-{server}"
     if game_key in alerted_games:
         return
 
@@ -80,14 +96,14 @@ def verificar_ponto_perdido(event):
         mensagem = (
             f"🎾 *ALERTA*: {server_name} perdeu o *primeiro ponto no saque* contra {opponent_name}!\n"
             f"🏆 Torneio: {event['tournament']['name']}\n"
-            f"📊 Set atual: {current_period}\n"
+            f"📊 {set_info}\n"
             f"🧮 Placar: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
         )
         enviar_mensagem_telegram(mensagem)
         alerted_games.add(game_key)
         game_state[event_id] = {
             "server": server,
-            "set": current_period,
+            "set_info": set_info,
             "status": "alertado"
         }
 
@@ -98,7 +114,7 @@ def verificar_fim_game(event):
 
     info = game_state[event_id]
     server = info["server"]
-    current_period = event.get("lastPeriod", "desconhecido")
+    set_info = formatar_set_e_game(event)
     home_score = event["homeScore"]["point"]
     away_score = event["awayScore"]["point"]
 
@@ -107,7 +123,7 @@ def verificar_fim_game(event):
         sacador = event["homeTeam"]["name"] if server == "home" else event["awayTeam"]["name"]
         simbolo = "✅" if sacador == vencedor else "❌"
         mensagem = (
-            f"🏁 *Fim do game* no set {current_period}!\n"
+            f"🏁 *Fim do game!* ({set_info})\n"
             f"🎾 {sacador} sacou e {simbolo} *{'venceu' if simbolo == '✅' else 'perdeu'}* o game!\n"
             f"📊 Placar final do game: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
         )
