@@ -6,6 +6,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 SOFASCORE_URL = "https://api.sofascore.com/api/v1/sport/tennis/events/live"
 
+# Set de identificadores únicos de alertas já enviados
 enviados = set()
 
 def enviar_mensagem_telegram(mensagem):
@@ -44,11 +45,6 @@ def verificar_ponto_inicial():
                 away_total_games += evento["awayScore"].get(f"period{i}", 0)
             total_games = home_total_games + away_total_games
 
-            # Identificador único por game
-            identificador = f"{id_jogo}-{total_games}"
-            if identificador in enviados:
-                continue
-
             # Determinar sacador atual
             if first_to_serve == 1:
                 sacador_atual = 1 if total_games % 2 == 0 else 2
@@ -59,14 +55,20 @@ def verificar_ponto_inicial():
             away_point = evento["awayScore"].get("point")
             ponto = f"{home_point}-{away_point}"
 
+            # Criar identificador único do game atual
+            game_id = f"{id_jogo}_{total_games}_{ponto}"
+
+            if game_id in enviados:
+                continue
+
             # Sacador perdeu o primeiro ponto
             if sacador_atual == 1 and ponto == "0-15":
                 mensagem = f"🎾 *{home}* começou sacando e perdeu o 1º ponto contra *{away}* (Placar: {ponto})"
-                enviados.add(identificador)
+                enviados.add(game_id)
                 enviar_mensagem_telegram(mensagem)
             elif sacador_atual == 2 and ponto == "15-0":
                 mensagem = f"🎾 *{away}* começou sacando e perdeu o 1º ponto contra *{home}* (Placar: {ponto})"
-                enviados.add(identificador)
+                enviados.add(game_id)
                 enviar_mensagem_telegram(mensagem)
     except Exception as e:
         print(f"Erro ao verificar jogos: {e}")
@@ -74,4 +76,4 @@ def verificar_ponto_inicial():
 # Loop contínuo (sem sleep, para Railway Background Worker)
 while True:
     verificar_ponto_inicial()
-    time.sleep(5)  # Opcional: remover no Railway e usar tasks/calls contínuas
+    time.sleep(1)  # Opcional: remover no Railway e usar tasks/calls contínuas
