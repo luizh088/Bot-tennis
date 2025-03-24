@@ -21,10 +21,15 @@ def obter_jogos_ao_vivo():
 
 def identificar_sacador(event):
     try:
+        point_map = {"0": 0, "15": 1, "30": 2, "40": 3, "A": 4, "Game": 5}
         first_to_serve = event.get("firstToServe")
+        if first_to_serve is None:
+            return None
+
         home_serving = first_to_serve == 1
-        home_point = int(event["homeScore"]["point"])
-        away_point = int(event["awayScore"]["point"])
+        home_point = point_map.get(event["homeScore"]["point"], 0)
+        away_point = point_map.get(event["awayScore"]["point"], 0)
+
         total_points = home_point + away_point
         if (total_points % 2 == 0 and home_serving) or (total_points % 2 == 1 and not home_serving):
             return "home"
@@ -41,9 +46,12 @@ def enviar_mensagem_telegram(mensagem):
         "text": mensagem,
         "parse_mode": "Markdown"
     }
-    response = requests.post(url, json=payload)
-    print("Status do envio:", response.status_code)
-    print("Resposta da API:", response.text)
+    try:
+        response = requests.post(url, json=payload)
+        print("Status do envio:", response.status_code)
+        print("Resposta da API:", response.text)
+    except Exception as e:
+        print(f"Erro ao enviar mensagem: {e}")
 
 def verificar_ponto_perdido(event):
     event_id = event["id"]
@@ -64,10 +72,10 @@ def verificar_ponto_perdido(event):
     if (server == "home" and home_score == "0" and away_score == "15") or \
        (server == "away" and away_score == "0" and home_score == "15"):
         mensagem = (
-            f"ALERTA: {server_name} perdeu o primeiro ponto no saque contra {opponent_name}!\n"
-            f"Torneio: {event['tournament']['name']}\n"
-            f"Set atual: {current_period}\n"
-            f"Placar atual: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
+            f"🎾 *ALERTA*: {server_name} perdeu o *primeiro ponto no saque* contra {opponent_name}!\n"
+            f"🏆 Torneio: {event['tournament']['name']}\n"
+            f"📊 Set atual: {current_period}\n"
+            f"🧮 Placar: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
         )
         enviar_mensagem_telegram(mensagem)
         alerted_games.add(game_key)
@@ -88,14 +96,14 @@ def verificar_fim_game(event):
     home_score = event["homeScore"]["point"]
     away_score = event["awayScore"]["point"]
 
-    if home_score not in ["0", "15", "30", "40"] and away_score not in ["0", "15", "30", "40"]:
+    if home_score == "Game" or away_score == "Game":
         vencedor = event["homeTeam"]["name"] if home_score == "Game" else event["awayTeam"]["name"]
         sacador = event["homeTeam"]["name"] if server == "home" else event["awayTeam"]["name"]
         simbolo = "✅" if sacador == vencedor else "❌"
         mensagem = (
-            f"Fim do game no set {current_period}!\n"
-            f"{sacador} sacou e {simbolo} ganhou o game!\n"
-            f"Placar: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
+            f"🏁 *Fim do game* no set {current_period}!\n"
+            f"🎾 {sacador} sacou e {simbolo} *{'venceu' if simbolo == '✅' else 'perdeu'}* o game!\n"
+            f"📊 Placar final do game: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
         )
         enviar_mensagem_telegram(mensagem)
         del game_state[event_id]
