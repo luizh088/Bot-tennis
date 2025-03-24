@@ -102,11 +102,19 @@ def verificar_ponto_perdido(event):
     if (server == "home" and home_score == "0" and away_score == "15") or \
        (server == "away" and away_score == "0" and home_score == "15"):
         mensagem = (
-            f"🎾 *ALERTA*: {server_name} perdeu o *primeiro ponto no saque* contra {opponent_name}!\n"
-            f"🏆 Torneio: {event['tournament']['name']}\n"
-            f"📊 {set_info}\n"
-            f"🧮 Placar: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
-        )
+        f"🎾 *ALERTA*: {server_name} perdeu o *primeiro ponto no saque* contra {opponent_name}!
+"
+        f"🏆 Torneio: {event['tournament']['name']}
+"
+        f"📊 {set_info}
+"
+        f"🧮 Placar: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
+    )
+"
+        f"🎾 {sacador} sacou e {simbolo} *{'venceu' if simbolo == '✅' else 'perdeu'}* o game!
+"
+        f"📊 Placar final do game: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
+    )
         enviar_mensagem_telegram(mensagem)
         alerted_games.add(game_key)
         game_state[event_id] = {
@@ -121,30 +129,13 @@ def verificar_fim_game(event):
         return
 
     info = game_state[event_id]
-    server = info["server"]
     game_key = info.get("game_key")
-    set_info = formatar_set_e_game(event)
-    home_score = event["homeScore"]["point"]
-    away_score = event["awayScore"]["point"]
 
-    if home_score == "Game" or away_score == "Game":
-        vencedor = event["homeTeam"]["name"] if home_score == "Game" else event["awayTeam"]["name"]
-        sacador = event["homeTeam"]["name"] if server == "home" else event["awayTeam"]["name"]
-        simbolo = "✅" if sacador == vencedor else "❌"
-        mensagem = (
-            f"🏁 *Fim do game!* ({set_info})
-"
-            f"🎾 {sacador} sacou e {simbolo} *{'venceu' if simbolo == '✅' else 'perdeu'}* o game!
-"
-            f"📊 Placar final do game: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
-        )
-        enviar_mensagem_telegram(mensagem)
+    # Limpa os registros do game após fim do game
+    if game_key in alerted_games:
+        alerted_games.remove(game_key)
 
-        # Limpa os registros do game após fim do game
-        if game_key in alerted_games:
-            alerted_games.remove(game_key)
-
-        del game_state[event_id]
+    del game_state[event_id]
 
 def main():
     print("Iniciando monitoramento dos jogos de tênis...")
