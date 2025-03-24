@@ -1,67 +1,12 @@
 import os
 import requests
 import time
-import re
 
-# Variáveis de ambiente para token e ID do chat
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
+SOFASCORE_URL = "https://api.sofascore.com/api/v1/sport/tennis/events/live"
 
-# URL da API da Sofascore
-SOFASCORE_API_URL = "https://api.sofascore.com/api/v1/sport/tennis/events/live"
-
-# Memória para controle de alertas enviados
-alerted_games = set()
-
-def obter_jogos_ao_vivo():
-    try:
-        response = requests.get(SOFASCORE_API_URL)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("events", [])
-    except Exception as e:
-        print(f"Erro ao obter jogos: {e}")
-        return []
-
-def identificar_sacador(event):
-    try:
-        first_to_serve = event.get("firstToServe")
-        if first_to_serve not in [1, 2]:
-            return None
-
-        home_serving_first = first_to_serve == 1
-
-        total_games = 0
-        for i in range(1, 6):
-            total_games += event["homeScore"].get(f"period{i}", 0)
-            total_games += event["awayScore"].get(f"period{i}", 0)
-
-        if (total_games % 2 == 0 and home_serving_first) or (total_games % 2 == 1 and not home_serving_first):
-            return "home"
-        else:
-            return "away"
-    except Exception as e:
-        print(f"Erro ao identificar sacador: {e}")
-        return None
-
-def formatar_set_e_game(event):
-    try:
-        last_period_raw = event.get("lastPeriod", "period1")
-        match = re.search(r"(\d+)", last_period_raw)
-        if not match:
-            return "Set desconhecido"
-
-        period_index = int(match.group(1))
-        set_nome = f"Set {period_index}"
-
-        home_games = event["homeScore"].get(f"period{period_index}", 0)
-        away_games = event["awayScore"].get(f"period{period_index}", 0)
-        game_atual = home_games + away_games + 1
-
-        return f"{set_nome} - Game {game_atual}"
-    except Exception as e:
-        print(f"Erro ao formatar set/game: {e}")
-        return "Set desconhecido"
+enviados = set()
 
 def enviar_mensagem_telegram(mensagem):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -77,49 +22,56 @@ def enviar_mensagem_telegram(mensagem):
     except Exception as e:
         print(f"Erro ao enviar mensagem: {e}")
 
-def verificar_ponto_perdido(event):
-    event_id = event["id"]
-    server = identificar_sacador(event)
-    if not server:
-        return
+def verificar_ponto_inicial():
+    try:
+        resposta = requests.get(SOFASCORE_URL)
+        dados = resposta.json()
 
-    match = re.search(r"(\d+)", event.get("lastPeriod", "period1"))
-    set_index = int(match.group(1)) if match else 1
-    home_games = event["homeScore"].get(f"period{set_index}", 0)
-    away_games = event["awayScore"].get(f"period{set_index}", 0)
-    game_id = home_games + away_games + 1
-    game_key = f"{event_id}-set{set_index}-game{game_id}-{server}"
+        for evento in dados.get("events", []):
+            if evento.get("status", {}).get("type") != "inprogress":
+                continue
 
-    if game_key in alerted_games:
-        return
+            id_jogo = evento["id"]
+            home = evento["homeTeam"]["shortName"]
+            away = evento["awayTeam"]["shortName"]
+            first_to_serve = evento.get("firstToServe")
 
-    home_score = event["homeScore"].get("point", "")
-    away_score = event["awayScore"].get("point", "")
+            # Somar total de games jogados em todos os sets
+            home_total_games = 0
+            away_total_games = 0
+            for i in range(1, 6):
+                home_total_games += evento["homeScore"].get(f"period{i}", 0)
+                away_total_games += evento["awayScore"].get(f"period{i}", 0)
+            total_games = home_total_games + away_total_games
 
-    if (server == "home" and home_score == "0" and away_score == "15") or \
-       (server == "away" and away_score == "0" and home_score == "15"):
+            # Identificador único por game
+            identificador = f"{id_jogo}-{total_games}"
+            if identificador in enviados:
+                continue
 
-        server_name = event["homeTeam"]["name"] if server == "home" else event["awayTeam"]["name"]
-        opponent_name = event["awayTeam"]["name"] if server == "home" else event["homeTeam"]["name"]
-        set_info = formatar_set_e_game(event)
+            # Determinar sacador atual
+            if first_to_serve == 1:
+                sacador_atual = 1 if total_games % 2 == 0 else 2
+            else:
+                sacador_atual = 2 if total_games % 2 == 0 else 1
 
-        mensagem = (
-            f"\U0001F3BE *ALERTA*: {server_name} perdeu o *primeiro ponto no saque* contra {opponent_name}!\n"
-            f"\U0001F3C6 Torneio: {event['tournament']['name']}\n"
-            f"\U0001F4CA {set_info}\n"
-            f"\U0001FAEE Placar: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
-        )
+            home_point = evento["homeScore"].get("point")
+            away_point = evento["awayScore"].get("point")
+            ponto = f"{home_point}-{away_point}"
 
-        enviar_mensagem_telegram(mensagem)
-        alerted_games.add(game_key)
+            # Sacador perdeu o primeiro ponto
+            if sacador_atual == 1 and ponto == "0-15":
+                mensagem = f"🎾 *{home}* começou sacando e perdeu o 1º ponto contra *{away}* (Placar: {ponto})"
+                enviados.add(identificador)
+                enviar_mensagem_telegram(mensagem)
+            elif sacador_atual == 2 and ponto == "15-0":
+                mensagem = f"🎾 *{away}* começou sacando e perdeu o 1º ponto contra *{home}* (Placar: {ponto})"
+                enviados.add(identificador)
+                enviar_mensagem_telegram(mensagem)
+    except Exception as e:
+        print(f"Erro ao verificar jogos: {e}")
 
-def main():
-    print("Monitorando jogos de tênis ao vivo...")
-    while True:
-        eventos = obter_jogos_ao_vivo()
-        for evento in eventos:
-            verificar_ponto_perdido(evento)
-        time.sleep(1)
-
-if __name__ == "__main__":
-    main()
+# Loop contínuo (sem sleep, para Railway Background Worker)
+while True:
+    verificar_ponto_inicial()
+    time.sleep(5)  # Opcional: remover no Railway e usar tasks/calls contínuas
