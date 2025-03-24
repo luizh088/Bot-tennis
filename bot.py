@@ -28,7 +28,6 @@ def identificar_sacador(event):
 
         home_serving_first = first_to_serve == 1
 
-        # Soma todos os games jogados em todos os sets
         total_games = 0
         for i in range(1, 6):  # até 5 sets
             home_games = event["homeScore"].get(f"period{i}")
@@ -36,7 +35,6 @@ def identificar_sacador(event):
             if home_games is not None and away_games is not None:
                 total_games += home_games + away_games
 
-        # Define o sacador com base na ordem de saque e total de games jogados
         if (total_games % 2 == 0 and home_serving_first) or \
            (total_games % 2 == 1 and not home_serving_first):
             return "home"
@@ -49,8 +47,6 @@ def identificar_sacador(event):
 def formatar_set_e_game(event):
     try:
         last_period_raw = event.get("lastPeriod", "period1")
-
-        # Extrai número do set (ex: "period2" → 2)
         match = re.search(r"(\d+)", last_period_raw)
         if not match:
             return "Set desconhecido"
@@ -87,15 +83,22 @@ def verificar_ponto_perdido(event):
     if not server:
         return
 
+    # Geração de chave única confiável por game
+    match = re.search(r"(\d+)", event.get("lastPeriod", "period1"))
+    set_index = int(match.group(1)) if match else 1
+    home_games = event["homeScore"].get(f"period{set_index}", 0)
+    away_games = event["awayScore"].get(f"period{set_index}", 0)
+    game_number = home_games + away_games + 1
+    game_key = f"{event_id}-set{set_index}-game{game_number}-{server}"
+
+    if game_key in alerted_games:
+        return
+
     server_name = event["homeTeam"]["name"] if server == "home" else event["awayTeam"]["name"]
     opponent_name = event["awayTeam"]["name"] if server == "home" else event["homeTeam"]["name"]
     home_score = event["homeScore"]["point"]
     away_score = event["awayScore"]["point"]
     set_info = formatar_set_e_game(event)
-
-    game_key = f"{event_id}-{set_info}-{server}"
-    if game_key in alerted_games:
-        return
 
     if (server == "home" and home_score == "0" and away_score == "15") or \
        (server == "away" and away_score == "0" and home_score == "15"):
@@ -109,7 +112,7 @@ def verificar_ponto_perdido(event):
         alerted_games.add(game_key)
         game_state[event_id] = {
             "server": server,
-            "set_info": set_info,
+            "game_key": game_key,
             "status": "alertado"
         }
 
