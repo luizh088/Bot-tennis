@@ -28,10 +28,11 @@ def identificar_sacador(event):
 
         home_serving_first = first_to_serve == 1
 
+        # Soma todos os games dos dois jogadores em todos os sets
         total_games = 0
         for i in range(1, 6):
-            home_games = event["homeScore"].get(f"period{i}", 0)
-            away_games = event["awayScore"].get(f"period{i}", 0)
+            home_games = int(event["homeScore"].get(f"period{i}", 0))
+            away_games = int(event["awayScore"].get(f"period{i}", 0))
             total_games += home_games + away_games
 
         if (total_games % 2 == 0 and home_serving_first) or \
@@ -102,11 +103,11 @@ def verificar_ponto_perdido(event):
     if (server == "home" and home_score == "0" and away_score == "15") or \
        (server == "away" and away_score == "0" and home_score == "15"):
         mensagem = (
-    f"🎾 *ALERTA*: {server_name} perdeu o *primeiro ponto no saque* contra {opponent_name}!\n"
-    f"🏆 Torneio: {event['tournament']['name']}\n"
-    f"📊 {set_info}\n"
-    f"🧮 Placar: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
-)
+            f"🎾 *ALERTA*: {server_name} perdeu o *primeiro ponto no saque* contra {opponent_name}!\n"
+            f"🏆 Torneio: {event['tournament']['name']}\n"
+            f"📊 {set_info}\n"
+            f"🧮 Placar: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
+        )
         enviar_mensagem_telegram(mensagem)
         alerted_games.add(game_key)
         game_state[event_id] = {
