@@ -123,7 +123,15 @@ def verificar_fim_game(event):
 
     info = game_state[event_id]
     game_key = info.get("game_key")
-   
+
+    home_point = event["homeScore"].get("point")
+    away_point = event["awayScore"].get("point")
+
+    # Se o placar não está mais em 0x15 ou 15x0, o primeiro ponto já passou
+    if not ((home_point == "0" and away_point == "15") or (home_point == "15" and away_point == "0")):
+        if game_key in alerted_games:
+            alerted_games.remove(game_key)
+        del game_state[event_id]
 
 def main():
     print("Iniciando monitoramento dos jogos de tênis...")
