@@ -21,16 +21,29 @@ def obter_jogos_ao_vivo():
 
 def identificar_sacador(event):
     try:
-        point_map = {"0": 0, "15": 1, "30": 2, "40": 3, "A": 4, "Game": 5}
+        point_map = {
+            "0": 0,
+            "15": 1,
+            "30": 2,
+            "40": 3,
+            "A": 4,     # vantagem
+            "Game": 5   # game vencido
+        }
+
         first_to_serve = event.get("firstToServe")
         if first_to_serve is None:
             return None
 
         home_serving = first_to_serve == 1
-        home_point = point_map.get(event["homeScore"]["point"], 0)
-        away_point = point_map.get(event["awayScore"]["point"], 0)
+
+        home_point_str = event["homeScore"]["point"]
+        away_point_str = event["awayScore"]["point"]
+
+        home_point = point_map.get(home_point_str, 0)
+        away_point = point_map.get(away_point_str, 0)
 
         total_points = home_point + away_point
+
         if (total_points % 2 == 0 and home_serving) or (total_points % 2 == 1 and not home_serving):
             return "home"
         else:
