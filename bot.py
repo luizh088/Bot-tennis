@@ -123,12 +123,7 @@ def verificar_fim_game(event):
 
     info = game_state[event_id]
     game_key = info.get("game_key")
-
-    # Limpa os registros do game após fim do game
-    if game_key in alerted_games:
-        alerted_games.remove(game_key)
-
-    del game_state[event_id]
+   
 
 def main():
     print("Iniciando monitoramento dos jogos de tênis...")
