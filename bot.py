@@ -89,7 +89,7 @@ def verificar_ponto_perdido(event):
 
     home_games = event["homeScore"].get(f"period{set_index}", 0)
     away_games = event["awayScore"].get(f"period{set_index}", 0)
-    game_id = home_games + away_games  # sem +1 para refletir o início do game
+    game_id = max(home_games + away_games - 1, 0)  # Ajuste crucial aqui
     game_key = f"{event_id}-set{set_index}-game{game_id}-{server}"
 
     if game_key in alerted_games:
