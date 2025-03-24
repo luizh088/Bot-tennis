@@ -1,6 +1,7 @@
 import os
 import requests
 import time
+import re
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -47,8 +48,14 @@ def formatar_set_e_game(event):
     try:
         home_games = event["homeScore"].get("games", [])
         away_games = event["awayScore"].get("games", [])
-        current_set_index = int(event.get("lastPeriod", 1)) - 1
+        last_period_raw = event.get("lastPeriod", "period1")
 
+        # Extrai o número do set a partir de "period1", "period2", etc.
+        match = re.search(r"(\d+)", last_period_raw)
+        if not match:
+            return "Set desconhecido"
+
+        current_set_index = int(match.group(1)) - 1
         set_numero = current_set_index + 1
         set_nome = f"Set {set_numero}"
 
