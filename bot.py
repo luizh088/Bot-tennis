@@ -110,11 +110,6 @@ def verificar_ponto_perdido(event):
 "
         f"🧮 Placar: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
     )
-"
-        f"🎾 {sacador} sacou e {simbolo} *{'venceu' if simbolo == '✅' else 'perdeu'}* o game!
-"
-        f"📊 Placar final do game: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
-    )
         enviar_mensagem_telegram(mensagem)
         alerted_games.add(game_key)
         game_state[event_id] = {
