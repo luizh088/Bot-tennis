@@ -50,7 +50,7 @@ def formatar_set_e_game(event):
         away_games = event["awayScore"].get("games", [])
         last_period_raw = event.get("lastPeriod", "period1")
 
-        # Extrai o número do set a partir de "period1", "period2", etc.
+        # Extrai número do set de strings como "period1", "period2", etc.
         match = re.search(r"(\d+)", last_period_raw)
         if not match:
             return "Set desconhecido"
@@ -59,9 +59,11 @@ def formatar_set_e_game(event):
         set_numero = current_set_index + 1
         set_nome = f"Set {set_numero}"
 
+        # Soma dos games vencidos no set atual
         home_set_games = home_games[current_set_index] if current_set_index < len(home_games) else 0
         away_set_games = away_games[current_set_index] if current_set_index < len(away_games) else 0
 
+        # Game atual em andamento
         game_atual = home_set_games + away_set_games + 1
         return f"{set_nome} - Game {game_atual}"
     except Exception as e:
