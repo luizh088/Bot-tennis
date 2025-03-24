@@ -1,14 +1,13 @@
 import os
-import requests
 import time
-from datetime import datetime
+import requests
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
-API_URL = "https://api.sofascore.com/api/v1/sport/tennis/events/live"  # API REAL
+API_URL = "https://api.sofascore.com/api/v1/sport/tennis/events/live"
 
-sacadores_alertados = {}
-status_ultimo_alerta = {}
+# Guardar alertas já enviados
+alertas_enviados = {}
 
 def enviar_mensagem(texto):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -17,82 +16,86 @@ def enviar_mensagem(texto):
         "text": texto,
         "parse_mode": "Markdown"
     }
-    response = requests.post(url, json=payload)
-    print(f"\nEnviando alerta...\nStatus do envio: {response.status_code}\nResposta da API: {response.text}\n")
+    resposta = requests.post(url, json=payload)
+    print("Status do envio:", resposta.status_code)
+    print("Resposta da API:", resposta.text)
 
-def formatar_placar(home, away):
-    sets = []
-    for i in range(1, 6):
-        s_home = home.get(f'period{i}')
-        s_away = away.get(f'period{i}')
-        if s_home is not None or s_away is not None:
-            sets.append(f"{s_home if s_home is not None else 0} x {s_away if s_away is not None else 0}")
-    return " | ".join(sets)
+def formatar_placar(home, away, game_score):
+    home_point = game_score.get("home", "")
+    away_point = game_score.get("away", "")
+    return f"{home} {home_point} x {away_point} {away}"
 
-def monitorar_jogos():
+def verificar_ponto_perdido(event):
+    event_id = event["id"]
+    home = event["homeTeam"]["shortName"]
+    away = event["awayTeam"]["shortName"]
+    server = event.get("firstToServe", 1)  # 1 = home, 2 = away
+
+    home_point = event["homeScore"]["point"]
+    away_point = event["awayScore"]["point"]
+
+    game_key = f"{event_id}-{event['period']}-{server}"
+
+    # Verifica se já mandamos alerta pra esse game
+    if game_key in alertas_enviados:
+        return
+
+    perdeu_saque = False
+
+    # Sacador perdeu o primeiro ponto?
+    if server == 1 and home_point == "0" and away_point == "15":
+        perdeu_saque = True
+        sacador = home
+        adversario = away
+    elif server == 2 and away_point == "0" and home_point == "15":
+        perdeu_saque = True
+        sacador = away
+        adversario = home
+    else:
+        return
+
+    # Alerta novo
+    alertas_enviados[game_key] = True
+
+    torneio = event["tournament"]["name"]
+    set_atual = event.get("lastPeriod", "Desconhecido")
+    placar_atual = formatar_placar(home, away, event["homeScore"]) if server == 1 else formatar_placar(home, away, event["awayScore"])
+
+    texto = (
+        f"*ALERTA*: {sacador} perdeu o primeiro ponto no saque contra {adversario}!\n"
+        f"Torneio: {torneio}\n"
+        f"Set atual: {set_atual}\n"
+        f"Placar atual: {placar_atual}"
+    )
+    enviar_mensagem(texto)
+
+def mostrar_jogos_ao_vivo(events):
+    for event in events:
+        home = event["homeTeam"]["shortName"]
+        away = event["awayTeam"]["shortName"]
+        texto = f"**AO VIVO**: {home} x {away}\nPlacar: {formatar_placar(home, away, event['homeScore'])}"
+        enviar_mensagem(texto)
+
+def obter_jogos():
+    try:
+        resposta = requests.get(API_URL)
+        if resposta.status_code == 200:
+            return resposta.json().get("events", [])
+        else:
+            print("Erro ao obter jogos:", resposta.status_code)
+    except Exception as e:
+        print("Exceção ao obter jogos:", e)
+    return []
+
+def main():
+    print("Iniciando monitoramento dos jogos de tênis...")
     while True:
-        try:
-            response = requests.get(API_URL)
-            data = response.json()
-            eventos = data.get("events", [])
-
-            if not eventos:
-                print(f"{datetime.now()}: Nenhum jogo ao vivo no momento.")
-                time.sleep(300)
-                continue
-
-            for jogo in eventos:
-                home = jogo["homeTeam"]["name"]
-                away = jogo["awayTeam"]["name"]
-                current_set = jogo.get("lastPeriod", "Desconhecido")
-                tournament = jogo["tournament"]["name"]
-                event_id = jogo["id"]
-                first_to_serve = jogo.get("firstToServe", 1)
-
-                score_home = jogo["homeScore"]
-                score_away = jogo["awayScore"]
-                point_home = score_home.get("point", "")
-                point_away = score_away.get("point", "")
-                placar = formatar_placar(score_home, score_away)
-
-                sacador = home if first_to_serve == 1 else away
-                recebedor = away if first_to_serve == 1 else home
-                chave = f"{event_id}_{current_set}"
-
-                if point_home == "15" and point_away == "0" and sacador == home:
-                    if sacadores_alertados.get(chave) != "alertado":
-                        mensagem = f"ALERTA: {home} perdeu o primeiro ponto no saque contra {away}!\nTorneio: {tournament}\nSet atual: {current_set}\nPlacar atual: {home} {point_home} x {point_away} {away}"
-                        enviar_mensagem(mensagem)
-                        sacadores_alertados[chave] = "alertado"
-                        status_ultimo_alerta[chave] = "sacador"
-
-                elif point_away == "15" and point_home == "0" and sacador == away:
-                    if sacadores_alertados.get(chave) != "alertado":
-                        mensagem = f"ALERTA: {away} perdeu o primeiro ponto no saque contra {home}!\nTorneio: {tournament}\nSet atual: {current_set}\nPlacar atual: {home} {point_home} x {point_away} {away}"
-                        enviar_mensagem(mensagem)
-                        sacadores_alertados[chave] = "alertado"
-                        status_ultimo_alerta[chave] = "sacador"
-
-                if sacadores_alertados.get(chave) == "alertado":
-                    if point_home == "" and point_away == "":
-                        if score_home["current"] > score_away["current"]:
-                            vencedor = home
-                        else:
-                            vencedor = away
-
-                        if vencedor == sacador:
-                            resultado = "✅ VENCEU o game!"
-                        else:
-                            resultado = "❌ PERDEU o game!"
-
-                        enviar_mensagem(f"{sacador} {resultado}\nJogo: {home} x {away}\nPlacar: {placar}")
-                        sacadores_alertados[chave] = "resolvido"
-
-        except Exception as e:
-            print(f"Exceção ao obter jogos: {e}")
-
-        time.sleep(1)
+        eventos = obter_jogos()
+        if not eventos:
+            print("Nenhum jogo ao vivo no momento.")
+        for evento in eventos:
+            verificar_ponto_perdido(evento)
+        time.sleep(5)
 
 if __name__ == "__main__":
-    print("Iniciando monitoramento dos jogos de tênis...")
-    monitorar_jogos()
+    main()
