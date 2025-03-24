@@ -1,44 +1,69 @@
 import os
-import requests
-import time
-import datetime
+import aiohttp
+import asyncio
 
-# Configurações iniciais
-API_URL = "https://api.exemplo.com/tennis/live"  # Substitua pela URL real da API de jogos ao vivo
-INTERVALO_VERIFICACAO = 300  # Intervalo de 5 minutos (300 segundos)
+TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-# Função para obter dados dos jogos ao vivo
-def obter_jogos_ao_vivo():
+jogos_alertados = {}
+
+def formata_placar(event):
     try:
-        response = requests.get(API_URL)
-        if response.status_code == 200:
-            return response.json()  # Supondo que a API retorne JSON
-        else:
-            print(f"Erro ao obter jogos: {response.status_code}")
-            return []
-    except Exception as e:
-        print(f"Exceção ao obter jogos: {e}")
-        return []
+        p1 = event["homeScore"].get("period1", 0)
+        p2 = event["awayScore"].get("period1", 0)
+        return f"{p1}-{p2}"
+    except:
+        return "Sem placar"
 
-# Função para exibir os jogos ao vivo
-def exibir_jogos_ao_vivo(jogos):
-    if jogos:
-        print(f"\n{datetime.datetime.now()}: Jogos ao vivo no momento:")
-        for jogo in jogos:
-            jogador1 = jogo['jogador1']
-            jogador2 = jogo['jogador2']
-            placar = jogo['placar']  # Ajuste conforme a estrutura real dos dados
-            print(f"{jogador1} vs {jogador2} - Placar: {placar}")
-    else:
-        print(f"\n{datetime.datetime.now()}: Nenhum jogo ao vivo no momento.")
+async def send_telegram_message(text):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"}
+    async with aiohttp.ClientSession() as session:
+        await session.post(url, data=payload)
 
-# Função principal de monitoramento
-def monitorar_jogos():
-    while True:
-        jogos_ao_vivo = obter_jogos_ao_vivo()
-        exibir_jogos_ao_vivo(jogos_ao_vivo)
-        time.sleep(INTERVALO_VERIFICACAO)
+async def monitorar():
+    url = "https://api.sofascore.com/api/v1/sport/tennis/events/live"
 
-# Execução do monitoramento
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(url) as response:
+                    data = await response.json()
+
+                for event in data.get("events", []):
+                    try:
+                        match_id = event["id"]
+                        home = event["homeTeam"]["name"]
+                        away = event["awayTeam"]["name"]
+                        score_home = event.get("homeScore", {}).get("point", "0")
+                        score_away = event.get("awayScore", {}).get("point", "0")
+                        sacador = home if event.get("firstToServe") == 1 else away
+                        adversario = away if sacador == home else home
+
+                        ponto = f"{score_home}-{score_away}" if sacador == home else f"{score_away}-{score_home}"
+
+                        # Alerta 0-15
+                        if ponto == "0-15" and match_id not in jogos_alertados:
+                            jogos_alertados[match_id] = {"sacador": sacador}
+                            placar = formata_placar(event)
+                            await send_telegram_message(
+                                f"**ALERTA**: {sacador} perdeu o primeiro ponto no saque contra {adversario}!\nPlacar atual do set: {placar}"
+                            )
+
+                        # Game reiniciado (0-0) depois do alerta
+                        if match_id in jogos_alertados and ponto == "0-0":
+                            vencedor = sacador if score_home == "15" else adversario
+                            await send_telegram_message(
+                                f"**FIM DO GAME**\n{sacador} sacava contra {adversario}\n**{vencedor} venceu o game**"
+                            )
+                            del jogos_alertados[match_id]
+
+                    except Exception as e:
+                        print(f"Erro no evento: {e}")
+
+            except Exception as e:
+                print(f"Erro geral: {e}")
+
+# Execução
 if __name__ == "__main__":
-    monitorar_jogos()
+    asyncio.run(monitorar())
