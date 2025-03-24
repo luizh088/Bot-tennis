@@ -35,7 +35,7 @@ def verificar_ponto_inicial():
             id_jogo = evento["id"]
             home = evento["homeTeam"]["shortName"]
             away = evento["awayTeam"]["shortName"]
-            first_to_serve = evento.get("firstToServe")
+            sacador_inicial = evento.get("firstToServe")  # 1 = home, 2 = away
 
             # Somar total de games jogados em todos os sets
             home_total_games = 0
@@ -45,11 +45,14 @@ def verificar_ponto_inicial():
                 away_total_games += evento["awayScore"].get(f"period{i}", 0)
             total_games = home_total_games + away_total_games
 
-            # Determinar sacador atual
-            if first_to_serve == 1:
-                sacador_atual = 1 if total_games % 2 == 0 else 2
+            # Alternar sacador baseado no total de games
+            if sacador_inicial:
+                if total_games % 2 == 0:
+                    sacador_atual = sacador_inicial
+                else:
+                    sacador_atual = 2 if sacador_inicial == 1 else 1
             else:
-                sacador_atual = 2 if total_games % 2 == 0 else 1
+                sacador_atual = 1  # fallback
 
             home_point = evento["homeScore"].get("point")
             away_point = evento["awayScore"].get("point")
@@ -57,7 +60,7 @@ def verificar_ponto_inicial():
 
             # Criar identificador único apenas por jogo e número de games (evita duplicação)
             game_id = f"{id_jogo}_{total_games}"
-            print(f"Verificando game_id: {game_id}, ponto: {ponto}")
+            print(f"Verificando game_id: {game_id}, ponto: {ponto}, sacador: {sacador_atual}")
 
             if game_id in enviados:
                 print(f"Já enviado: {game_id}")
