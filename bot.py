@@ -28,14 +28,12 @@ def identificar_sacador(event):
 
         home_serving_first = first_to_serve == 1
 
-        # Soma total de games jogados nos sets (exclui tiebreaks)
         total_games = 0
         for i in range(1, 6):
             home_games = event["homeScore"].get(f"period{i}", 0)
             away_games = event["awayScore"].get(f"period{i}", 0)
             total_games += home_games + away_games
 
-        # Alternância de saque com base na quantidade total de games
         if (total_games % 2 == 0 and home_serving_first) or \
            (total_games % 2 == 1 and not home_serving_first):
             return "home"
@@ -84,13 +82,12 @@ def verificar_ponto_perdido(event):
     if not server:
         return
 
-    # Geração de chave única confiável por game
     match = re.search(r"(\d+)", event.get("lastPeriod", "period1"))
     set_index = int(match.group(1)) if match else 1
 
     home_games = event["homeScore"].get(f"period{set_index}", 0)
     away_games = event["awayScore"].get(f"period{set_index}", 0)
-    game_id = max(home_games + away_games - 1, 0)
+    game_id = home_games + away_games + 1
     game_key = f"{event_id}-set{set_index}-game{game_id}-{server}"
 
     if game_key in alerted_games:
@@ -125,6 +122,7 @@ def verificar_fim_game(event):
 
     info = game_state[event_id]
     server = info["server"]
+    game_key = info.get("game_key")
     set_info = formatar_set_e_game(event)
     home_score = event["homeScore"]["point"]
     away_score = event["awayScore"]["point"]
@@ -134,11 +132,18 @@ def verificar_fim_game(event):
         sacador = event["homeTeam"]["name"] if server == "home" else event["awayTeam"]["name"]
         simbolo = "✅" if sacador == vencedor else "❌"
         mensagem = (
-            f"🏁 *Fim do game!* ({set_info})\n"
-            f"🎾 {sacador} sacou e {simbolo} *{'venceu' if simbolo == '✅' else 'perdeu'}* o game!\n"
+            f"🏁 *Fim do game!* ({set_info})
+"
+            f"🎾 {sacador} sacou e {simbolo} *{'venceu' if simbolo == '✅' else 'perdeu'}* o game!
+"
             f"📊 Placar final do game: {event['homeTeam']['name']} {home_score} x {away_score} {event['awayTeam']['name']}"
         )
         enviar_mensagem_telegram(mensagem)
+
+        # Limpa os registros do game após fim do game
+        if game_key in alerted_games:
+            alerted_games.remove(game_key)
+
         del game_state[event_id]
 
 def main():
