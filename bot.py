@@ -57,8 +57,10 @@ def verificar_ponto_inicial():
 
             # Criar identificador único do game atual
             game_id = f"{id_jogo}_{total_games}_{ponto}"
+            print(f"Verificando game_id: {game_id}")
 
             if game_id in enviados:
+                print(f"Já enviado: {game_id}")
                 continue
 
             # Sacador perdeu o primeiro ponto
@@ -76,4 +78,4 @@ def verificar_ponto_inicial():
 # Loop contínuo (sem sleep, para Railway Background Worker)
 while True:
     verificar_ponto_inicial()
-    time.sleep(1)  # Opcional: remover no Railway e usar tasks/calls contínuas
+    time.sleep(5)  # Opcional: remover no Railway e usar tasks/calls contínuas
