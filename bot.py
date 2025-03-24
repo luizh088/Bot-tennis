@@ -1,11 +1,15 @@
 import os
 import requests
 import time
+import urllib3
 
 # Configurações iniciais
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 API_URL = "https://api.exemplo.com/tennis/live"  # Substitua pela URL real da API de jogos ao vivo
+
+# Desabilitar avisos de insegurança (caso desabilite a verificação SSL)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Função para enviar mensagens no Telegram
 def enviar_alerta(mensagem):
@@ -25,7 +29,7 @@ def enviar_alerta(mensagem):
 # Função para obter dados dos jogos ao vivo
 def obter_jogos_ao_vivo():
     try:
-        response = requests.get(API_URL)
+        response = requests.get(API_URL, verify=False)  # Desabilitar verificação SSL
         if response.status_code == 200:
             return response.json()  # Supondo que a API retorne JSON
         else:
