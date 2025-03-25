@@ -86,4 +86,4 @@ def verificar_ponto_inicial():
 # Loop contínuo (sem sleep, para Railway Background Worker)
 while True:
     verificar_ponto_inicial()
-    time.sleep(1)  # Opcional: remover no Railway e usar tasks/calls contínuas
+    time.sleep(3)  # Opcional: remover no Railway e usar tasks/calls contínuas
