@@ -1,89 +1,64 @@
-import os
 import requests
 import time
+import telegram
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
-SOFASCORE_URL = "https://api.sofascore.com/api/v1/sport/tennis/events/live"
+TOKEN = 'SEU_TOKEN_DO_BOT'
+CHAT_ID = 'SEU_CHAT_ID'
+bot = telegram.Bot(token=TOKEN)
 
-# Set de identificadores únicos de alertas já enviados
 enviados = set()
 
-def enviar_mensagem_telegram(mensagem):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": mensagem,
-        "parse_mode": "Markdown"
-    }
+while True:
     try:
-        requests.post(url, json=payload)
-    except Exception as e:
-        print(f"Erro ao enviar mensagem: {e}")
-
-def verificar_ponto_inicial():
-    try:
-        resposta = requests.get(SOFASCORE_URL)
+        resposta = requests.get("https://api.sofascore.com/api/v1/sport/tennis/events/live")
         dados = resposta.json()
 
         for evento in dados.get("events", []):
             if evento.get("status", {}).get("type") != "inprogress":
                 continue
 
-            tournament_category = evento.get("tournament", {}).get("category", {}).get("name", "")
-            unique_tournament_name = evento.get("tournament", {}).get("uniqueTournament", {}).get("name", "")
+            # Filtro para jogos masculinos da ATP ou Challenger
+            categoria = evento.get("tournament", {}).get("category", {}).get("name", "").lower()
+            genero = evento.get("homeTeam", {}).get("gender")
 
-            if not (
-                "ATP" in tournament_category or
-                ("Challenger" in unique_tournament_name and evento.get("homeTeam", {}).get("gender") == "M")
-            ):
+            if genero != "M" or not ("atp" in categoria or "challenger" in categoria):
                 continue
 
             id_jogo = evento["id"]
             home = evento["homeTeam"]["shortName"]
             away = evento["awayTeam"]["shortName"]
-            sacador_inicial = evento.get("firstToServe")  # 1 = home, 2 = away
+            first_to_serve = evento.get("firstToServe")
 
-            if sacador_inicial not in [1, 2]:
-                continue
+            home_sets = sum([evento["homeScore"].get(f"period{i}", 0) for i in range(1, 6)])
+            away_sets = sum([evento["awayScore"].get(f"period{i}", 0) for i in range(1, 6)])
+            total_games = home_sets + away_sets
 
-            # Somar total de games jogados em todos os sets
-            home_total_games = 0
-            away_total_games = 0
-            for i in range(1, 6):
-                home_total_games += evento["homeScore"].get(f"period{i}", 0)
-                away_total_games += evento["awayScore"].get(f"period{i}", 0)
-            total_games = home_total_games + away_total_games
-
-            # Alternar sacador baseado no total de games
-            if total_games % 2 == 0:
-                sacador_atual = sacador_inicial
+            sacador_inicial = first_to_serve
+            if sacador_inicial:
+                sacador_atual = sacador_inicial if total_games % 2 == 0 else 2 if sacador_inicial == 1 else 1
             else:
-                sacador_atual = 2 if sacador_inicial == 1 else 1
+                continue  # pula se não sabemos quem sacou primeiro
 
-            home_point = evento["homeScore"].get("point")
-            away_point = evento["awayScore"].get("point")
-            ponto = f"{home_point}-{away_point}"
+            home_point = evento["homeScore"].get("point", "")
+            away_point = evento["awayScore"].get("point", "")
+            placar = f"{home_point}-{away_point}"
 
-            # Criar identificador único apenas por jogo e número de games (evita duplicação)
-            game_id = f"{id_jogo}_{total_games}"
+            # Verifica se é o primeiro ponto do game e quem sacou
+            if sacador_atual == 1 and placar == "0-15":
+                game_id = f"{id_jogo}_{total_games}_0-15"
+                if game_id not in enviados:
+                    enviados.add(game_id)
+                    msg = f"🎾 *{home}* começou sacando e perdeu o 1º ponto contra *{away}* (Placar: {placar})"
+                    bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode=telegram.ParseMode.MARKDOWN)
 
-            if game_id in enviados:
-                continue
+            elif sacador_atual == 2 and placar == "15-0":
+                game_id = f"{id_jogo}_{total_games}_15-0"
+                if game_id not in enviados:
+                    enviados.add(game_id)
+                    msg = f"🎾 *{away}* começou sacando e perdeu o 1º ponto contra *{home}* (Placar: {placar})"
+                    bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode=telegram.ParseMode.MARKDOWN)
 
-            # Sacador perdeu o primeiro ponto
-            if sacador_atual == 1 and ponto == "0-15":
-                mensagem = f"🎾 *{home}* começou sacando e perdeu o 1º ponto contra *{away}* (Placar: {ponto})"
-                enviados.add(game_id)
-                enviar_mensagem_telegram(mensagem)
-            elif sacador_atual == 2 and ponto == "15-0":
-                mensagem = f"🎾 *{away}* começou sacando e perdeu o 1º ponto contra *{home}* (Placar: {ponto})"
-                enviados.add(game_id)
-                enviar_mensagem_telegram(mensagem)
     except Exception as e:
-        print(f"Erro ao verificar jogos: {e}")
+        print(f"Erro: {e}")
 
-# Loop contínuo (sem sleep, para Railway Background Worker)
-while True:
-    verificar_ponto_inicial()
-    time.sleep(3)  # Opcional: remover no Railway e usar tasks/calls contínuas
+    time.sleep(3)
