@@ -32,18 +32,22 @@ def verificar_ponto_inicial():
             if evento.get("status", {}).get("type") != "inprogress":
                 continue
 
-            # Filtro para jogos masculinos da ATP ou Challenger
-            categoria = evento.get("tournament", {}).get("category", {}).get("name", "").lower()
-            genero = evento.get("homeTeam", {}).get("gender")
+            tournament_category = evento.get("tournament", {}).get("category", {}).get("name", "")
+            unique_tournament_name = evento.get("tournament", {}).get("uniqueTournament", {}).get("name", "")
 
-            # Ignora eventos que não sejam da ATP ou Challenger masculino
-            if genero != "M" or not ("atp" in categoria or "challenger" in categoria):
+            if not (
+                "ATP" in tournament_category or
+                ("Challenger" in unique_tournament_name and evento.get("homeTeam", {}).get("gender") == "M")
+            ):
                 continue
 
             id_jogo = evento["id"]
             home = evento["homeTeam"]["shortName"]
             away = evento["awayTeam"]["shortName"]
             sacador_inicial = evento.get("firstToServe")  # 1 = home, 2 = away
+
+            if sacador_inicial not in [1, 2]:
+                continue
 
             # Somar total de games jogados em todos os sets
             home_total_games = 0
@@ -54,13 +58,10 @@ def verificar_ponto_inicial():
             total_games = home_total_games + away_total_games
 
             # Alternar sacador baseado no total de games
-            if sacador_inicial:
-                if total_games % 2 == 0:
-                    sacador_atual = sacador_inicial
-                else:
-                    sacador_atual = 2 if sacador_inicial == 1 else 1
+            if total_games % 2 == 0:
+                sacador_atual = sacador_inicial
             else:
-                continue  # Ignorar jogos sem sacador inicial definido
+                sacador_atual = 2 if sacador_inicial == 1 else 1
 
             home_point = evento["homeScore"].get("point")
             away_point = evento["awayScore"].get("point")
@@ -68,20 +69,20 @@ def verificar_ponto_inicial():
 
             # Criar identificador único apenas por jogo e número de games (evita duplicação)
             game_id = f"{id_jogo}_{total_games}_{ponto}"
-            print(f"Verificando game_id: {game_id}, ponto: {ponto}, sacador: {sacador_atual}")
 
             if game_id in enviados:
-                print(f"Já enviado: {game_id}")
                 continue
 
             # Sacador perdeu o primeiro ponto
             if sacador_atual == 1 and ponto == "0-15":
                 mensagem = f"🎾 *{home}* começou sacando e perdeu o 1º ponto contra *{away}* (Placar: {ponto})"
                 enviados.add(game_id)
+                print(f"[DEBUG] Notificação enviada - total_games: {total_games}, sacador: HOME ({home}), game_id: {game_id}")
                 enviar_mensagem_telegram(mensagem)
             elif sacador_atual == 2 and ponto == "15-0":
                 mensagem = f"🎾 *{away}* começou sacando e perdeu o 1º ponto contra *{home}* (Placar: {ponto})"
                 enviados.add(game_id)
+                print(f"[DEBUG] Notificação enviada - total_games: {total_games}, sacador: AWAY ({away}), game_id: {game_id}")
                 enviar_mensagem_telegram(mensagem)
     except Exception as e:
         print(f"Erro ao verificar jogos: {e}")
