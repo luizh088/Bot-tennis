@@ -3,16 +3,9 @@ import asyncio
 import aiohttp
 from telegram import Bot
 
-try:
-    BOT_TOKEN = os.environ['BOT_TOKEN']
-    CHAT_ID = os.environ['CHAT_ID']
-    bot = Bot(token=BOT_TOKEN)
-except KeyError as ke:
-    print(f"Erro: Variável de ambiente não encontrada: {ke}")
-    raise
-except Exception as e:
-    print(f"Erro ao inicializar o bot: {e}")
-    raise
+BOT_TOKEN = os.environ['BOT_TOKEN']
+CHAT_ID = os.environ['CHAT_ID']
+bot = Bot(token=BOT_TOKEN)
 
 games_notifications = {}
 
@@ -36,43 +29,41 @@ async def process_game(session, event):
 
     point_data = await fetch_point_by_point(session, event_id)
 
-    try:
-        server_id = point_data["serverPlayer"]
-        current_game_number = point_data["currentGame"]
+    # Corrigido: verificar se serverPlayer e currentGame existem
+    if "serverPlayer" not in point_data or "currentGame" not in point_data:
+        return  # Ignora se esses dados essenciais não existirem
 
-        if games_notifications.get(event_id) == current_game_number:
-            return
+    server_id = point_data["serverPlayer"]
+    current_game_number = point_data["currentGame"]
 
-        current_set = next(
-            (s for s in point_data["sets"] if s["setNumber"] == point_data["currentSet"]),
-            None
-        )
+    if games_notifications.get(event_id) == current_game_number:
+        return
 
-        if not current_set:
-            return
+    current_set = next(
+        (s for s in point_data["sets"] if s["setNumber"] == point_data["currentSet"]),
+        None
+    )
 
-        current_game = next(
-            (g for g in current_set["games"] if g["gameNumber"] == current_game_number),
-            None
-        )
+    if not current_set:
+        return
 
-        if current_game:
-            points = current_game.get("points", [])
+    current_game = next(
+        (g for g in current_set["games"] if g["gameNumber"] == current_game_number),
+        None
+    )
 
-            if len(points) == 1 and points[0]["winningPlayer"] != server_id:
-                server_name = home_name if server_id == event['homeTeam']['id'] else away_name
-                receiver_name = away_name if server_name == home_name else home_name
+    if current_game:
+        points = current_game.get("points", [])
 
-                message = (f"⚠️ {server_name} perdeu o primeiro ponto sacando contra "
-                           f"{receiver_name} ({game_slug}, game {current_game_number}).")
+        if len(points) == 1 and points[0]["winningPlayer"] != server_id:
+            server_name = home_name if server_id == event['homeTeam']['id'] else away_name
+            receiver_name = away_name if server_name == home_name else home_name
 
-                await bot.send_message(chat_id=CHAT_ID, text=message)
-                games_notifications[event_id] = current_game_number
+            message = (f"⚠️ {server_name} perdeu o primeiro ponto sacando contra "
+                       f"{receiver_name} ({game_slug}, game {current_game_number}).")
 
-    except KeyError as e:
-        print(f"Erro na estrutura dos dados recebidos: {e}")
-    except Exception as e:
-        print(f"Erro inesperado no processamento do jogo: {e}")
+            await bot.send_message(chat_id=CHAT_ID, text=message)
+            games_notifications[event_id] = current_game_number
 
 async def monitor_all_games():
     async with aiohttp.ClientSession() as session:
