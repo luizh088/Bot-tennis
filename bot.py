@@ -109,7 +109,7 @@ async def monitor_all_games():
                 tasks = [process_game(session, event) for event in events]
                 await asyncio.gather(*tasks)
 
-                await asyncio.sleep(10)
+                await asyncio.sleep(3)
             except Exception as e:
                 print(f"Erro na execução: {e}")
                 await asyncio.sleep(10)
