@@ -22,6 +22,12 @@ async def fetch_point_by_point(session, event_id):
         return await response.json()
 
 async def process_game(session, event):
+    tournament_category = event['tournament']['category']['slug']
+
+    if tournament_category not in ['atp', 'challenger']:
+        print(f"Ignorando torneio não ATP/Challenger: {tournament_category}")
+        return
+
     event_id = event['id']
     home_name = event['homeTeam']['shortName']
     away_name = event['awayTeam']['shortName']
