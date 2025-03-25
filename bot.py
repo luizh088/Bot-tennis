@@ -83,4 +83,7 @@ async def monitor_all_games():
                 await asyncio.sleep(10)
 
 if __name__ == '__main__':
-    asyncio.run(monitor_all_games())
+    try:
+        asyncio.run(monitor_all_games())
+    except Exception as e:
+        print(f"Erro fatal ao iniciar o bot: {e}")
