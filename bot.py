@@ -29,7 +29,11 @@ async def process_game(session, event):
 
     point_data = await fetch_point_by_point(session, event_id)
 
+    # Log completo dos dados retornados da API para diagnóstico
+    print(f"\nDados brutos da API para {game_slug}:\n{point_data}\n")
+
     if "serverPlayer" not in point_data or "currentGame" not in point_data:
+        print(f"Jogo {game_slug} ignorado por falta de dados essenciais.")
         return
 
     server_id = point_data["serverPlayer"]
@@ -64,7 +68,6 @@ async def process_game(session, event):
             await bot.send_message(chat_id=CHAT_ID, text=message)
             print(f"Notificação enviada: {message}")
             games_notifications[event_id] = current_game_number
-
 async def monitor_all_games():
     await bot.send_message(chat_id=CHAT_ID, text="✅ Bot iniciado corretamente e enviando notificações!")
     print("Mensagem teste enviada ao Telegram.")
