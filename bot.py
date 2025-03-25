@@ -29,9 +29,8 @@ async def process_game(session, event):
 
     point_data = await fetch_point_by_point(session, event_id)
 
-    # Corrigido: verificar se serverPlayer e currentGame existem
     if "serverPlayer" not in point_data or "currentGame" not in point_data:
-        return  # Ignora se esses dados essenciais não existirem
+        return
 
     server_id = point_data["serverPlayer"]
     current_game_number = point_data["currentGame"]
@@ -63,14 +62,20 @@ async def process_game(session, event):
                        f"{receiver_name} ({game_slug}, game {current_game_number}).")
 
             await bot.send_message(chat_id=CHAT_ID, text=message)
+            print(f"Notificação enviada: {message}")
             games_notifications[event_id] = current_game_number
 
 async def monitor_all_games():
+    await bot.send_message(chat_id=CHAT_ID, text="✅ Bot iniciado corretamente e enviando notificações!")
+    print("Mensagem teste enviada ao Telegram.")
+
     async with aiohttp.ClientSession() as session:
         while True:
             try:
                 live_events = await fetch_live_events(session)
                 events = live_events.get('events', [])
+                print(f"Número de jogos sendo monitorados: {len(events)}")
+
                 tasks = [process_game(session, event) for event in events]
                 await asyncio.gather(*tasks)
 
