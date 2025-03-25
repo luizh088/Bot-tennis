@@ -86,8 +86,10 @@ async def process_game(session, event):
                 if games_notifications.get(f"completed_{event_id}") != current_game_number:
                     winner = current_game["score"]["scoring"]
                     emoji = "✅" if winner == serving else "❌"
-                    winner_name = server_name if winner == serving else receiver_name
-                    message = (f"{emoji} {winner_name} venceu o game de saque ({game_slug}, game {current_game_number}).")
+                    if winner == serving:
+                        message = f"{emoji} {server_name} venceu o game de saque ({game_slug}, game {current_game_number})."
+                    else:
+                        message = f"{emoji} {server_name} perdeu o game de saque ({game_slug}, game {current_game_number})."
 
                     await bot.send_message(chat_id=CHAT_ID, text=message)
                     print(f"Notificação enviada: {message}")
