@@ -40,7 +40,7 @@ def verificar_ponto_inicial():
                 continue
 
             gender = evento.get("tournament", {}).get("category", {}).get("gender")
-            if gender != "male":
+            if gender != "M":
                 continue
 
             id_jogo = evento["id"]
