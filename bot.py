@@ -32,24 +32,18 @@ def verificar_ponto_inicial():
             if evento.get("status", {}).get("type") != "inprogress":
                 continue
 
-            tournament_name = evento.get("tournament", {}).get("name", "").lower()
-            category_name = evento.get("tournament", {}).get("category", {}).get("name", "").lower()
-            surface = evento.get("tournament", {}).get("surface", "").lower()
+            # Filtro para jogos masculinos da ATP ou Challenger
+            categoria = evento.get("tournament", {}).get("category", {}).get("name", "").lower()
+            genero = evento.get("homeTeam", {}).get("gender")
 
-            if "atp" not in tournament_name and "challenger" not in tournament_name:
-                continue
-
-            gender = evento.get("tournament", {}).get("category", {}).get("gender")
-            if gender != "M":
+            # Ignora eventos que não sejam da ATP ou Challenger masculino
+            if genero != "M" or not ("atp" in categoria or "challenger" in categoria):
                 continue
 
             id_jogo = evento["id"]
             home = evento["homeTeam"]["shortName"]
             away = evento["awayTeam"]["shortName"]
             sacador_inicial = evento.get("firstToServe")  # 1 = home, 2 = away
-
-            if sacador_inicial not in [1, 2]:
-                continue  # Ignorar se não souber quem começou sacando
 
             # Somar total de games jogados em todos os sets
             home_total_games = 0
@@ -60,18 +54,21 @@ def verificar_ponto_inicial():
             total_games = home_total_games + away_total_games
 
             # Alternar sacador baseado no total de games
-            if total_games % 2 == 0:
-                sacador_atual = sacador_inicial
+            if sacador_inicial:
+                if total_games % 2 == 0:
+                    sacador_atual = sacador_inicial
+                else:
+                    sacador_atual = 2 if sacador_inicial == 1 else 1
             else:
-                sacador_atual = 2 if sacador_inicial == 1 else 1
+                continue  # Ignorar jogos sem sacador inicial definido
 
             home_point = evento["homeScore"].get("point")
             away_point = evento["awayScore"].get("point")
             ponto = f"{home_point}-{away_point}"
 
             # Criar identificador único apenas por jogo e número de games (evita duplicação)
-            game_id = f"{id_jogo}_{total_games}"
-            print(f"Verificando game_id: {game_id}, sacador: {sacador_atual}")
+            game_id = f"{id_jogo}_{total_games}_{ponto}"
+            print(f"Verificando game_id: {game_id}, ponto: {ponto}, sacador: {sacador_atual}")
 
             if game_id in enviados:
                 print(f"Já enviado: {game_id}")
