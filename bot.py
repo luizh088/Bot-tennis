@@ -17,9 +17,7 @@ def enviar_mensagem_telegram(mensagem):
         "parse_mode": "Markdown"
     }
     try:
-        response = requests.post(url, json=payload)
-        print("Status do envio:", response.status_code)
-        print("Resposta da API:", response.text)
+        requests.post(url, json=payload)
     except Exception as e:
         print(f"Erro ao enviar mensagem: {e}")
 
@@ -77,12 +75,10 @@ def verificar_ponto_inicial():
             if sacador_atual == 1 and ponto == "0-15":
                 mensagem = f"🎾 *{home}* começou sacando e perdeu o 1º ponto contra *{away}* (Placar: {ponto})"
                 enviados.add(game_id)
-                print(f"[DEBUG] Notificação enviada - total_games: {total_games}, sacador: HOME ({home}), game_id: {game_id}")
                 enviar_mensagem_telegram(mensagem)
             elif sacador_atual == 2 and ponto == "15-0":
                 mensagem = f"🎾 *{away}* começou sacando e perdeu o 1º ponto contra *{home}* (Placar: {ponto})"
                 enviados.add(game_id)
-                print(f"[DEBUG] Notificação enviada - total_games: {total_games}, sacador: AWAY ({away}), game_id: {game_id}")
                 enviar_mensagem_telegram(mensagem)
     except Exception as e:
         print(f"Erro ao verificar jogos: {e}")
