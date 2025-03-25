@@ -70,8 +70,8 @@ def verificar_ponto_inicial():
             ponto = f"{home_point}-{away_point}"
 
             # Criar identificador único apenas por jogo e número de games (evita duplicação)
-            game_id = f"{id_jogo}_{total_games}_{ponto}"
-            print(f"Verificando game_id: {game_id}, ponto: {ponto}, sacador: {sacador_atual}")
+            game_id = f"{id_jogo}_{total_games}"
+            print(f"Verificando game_id: {game_id}, sacador: {sacador_atual}")
 
             if game_id in enviados:
                 print(f"Já enviado: {game_id}")
