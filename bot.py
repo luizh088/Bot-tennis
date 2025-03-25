@@ -29,45 +29,45 @@ async def process_game(session, event):
 
     point_data = await fetch_point_by_point(session, event_id)
 
-    # Log completo dos dados retornados da API para diagnóstico
-    print(f"\nDados brutos da API para {game_slug}:\n{point_data}\n")
-
-    if "serverPlayer" not in point_data or "currentGame" not in point_data:
-        print(f"Jogo {game_slug} ignorado por falta de dados essenciais.")
+    if "pointByPoint" not in point_data or not point_data["pointByPoint"]:
+        print(f"Jogo {game_slug} sem dados ponto a ponto disponíveis.")
         return
 
-    server_id = point_data["serverPlayer"]
-    current_game_number = point_data["currentGame"]
+    current_set = point_data["pointByPoint"][0]
+    current_game = current_set["games"][0]
+
+    if not current_game or not current_game.get("points"):
+        print(f"Jogo {game_slug} sem pontos disponíveis no game atual.")
+        return
+
+    current_game_number = current_game["game"]
+    serving = current_game["score"]["serving"]
+
+    server_name = home_name if serving == 1 else away_name
+    receiver_name = away_name if serving == 1 else home_name
 
     if games_notifications.get(event_id) == current_game_number:
         return
 
-    current_set = next(
-        (s for s in point_data["sets"] if s["setNumber"] == point_data["currentSet"]),
-        None
+    points = current_game["points"]
+    first_point = points[0]
+
+    home_point = first_point["homePoint"]
+    away_point = first_point["awayPoint"]
+
+    sacador_perdeu_primeiro_ponto = (
+        (serving == 1 and home_point == "0") or
+        (serving == 2 and away_point == "0")
     )
 
-    if not current_set:
-        return
+    if sacador_perdeu_primeiro_ponto:
+        message = (f"⚠️ {server_name} perdeu o primeiro ponto sacando contra "
+                   f"{receiver_name} ({game_slug}, game {current_game_number}).")
 
-    current_game = next(
-        (g for g in current_set["games"] if g["gameNumber"] == current_game_number),
-        None
-    )
+        await bot.send_message(chat_id=CHAT_ID, text=message)
+        print(f"Notificação enviada: {message}")
+        games_notifications[event_id] = current_game_number
 
-    if current_game:
-        points = current_game.get("points", [])
-
-        if len(points) == 1 and points[0]["winningPlayer"] != server_id:
-            server_name = home_name if server_id == event['homeTeam']['id'] else away_name
-            receiver_name = away_name if server_name == home_name else home_name
-
-            message = (f"⚠️ {server_name} perdeu o primeiro ponto sacando contra "
-                       f"{receiver_name} ({game_slug}, game {current_game_number}).")
-
-            await bot.send_message(chat_id=CHAT_ID, text=message)
-            print(f"Notificação enviada: {message}")
-            games_notifications[event_id] = current_game_number
 async def monitor_all_games():
     await bot.send_message(chat_id=CHAT_ID, text="✅ Bot iniciado corretamente e enviando notificações!")
     print("Mensagem teste enviada ao Telegram.")
