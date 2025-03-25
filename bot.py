@@ -32,9 +32,15 @@ def verificar_ponto_inicial():
             if evento.get("status", {}).get("type") != "inprogress":
                 continue
 
-            # Ignora se o torneio não for da ATP
-            categoria = evento.get("tournament", {}).get("category", {}).get("slug", "")
-            if categoria.lower() != "atp":
+            tournament_name = evento.get("tournament", {}).get("name", "").lower()
+            category_name = evento.get("tournament", {}).get("category", {}).get("name", "").lower()
+            surface = evento.get("tournament", {}).get("surface", "").lower()
+
+            if "atp" not in tournament_name and "challenger" not in tournament_name:
+                continue
+
+            gender = evento.get("tournament", {}).get("category", {}).get("gender")
+            if gender != "male":
                 continue
 
             id_jogo = evento["id"]
@@ -42,9 +48,8 @@ def verificar_ponto_inicial():
             away = evento["awayTeam"]["shortName"]
             sacador_inicial = evento.get("firstToServe")  # 1 = home, 2 = away
 
-            # Ignora jogos que não indicam sacador inicial
             if sacador_inicial not in [1, 2]:
-                continue
+                continue  # Ignorar se não souber quem começou sacando
 
             # Somar total de games jogados em todos os sets
             home_total_games = 0
