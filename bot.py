@@ -70,7 +70,7 @@ async def process_game(session, event):
 
 async def monitor_all_games():
     async with aiohttp.ClientSession() as session:
-        while True:
+        while True:  # Loop infinito aqui!
             try:
                 live_events = await fetch_live_events(session)
                 events = live_events.get('events', [])
