@@ -24,7 +24,7 @@ async def fetch_point_by_point(session, event_id):
 async def process_game(session, event):
     tournament_category = event['tournament']['category']['slug']
 
-    if tournament_category not in ['atp', 'challenger']:
+    if tournament_category not in ['atp', 'challenger'] or event['homeTeam']['type'] != 1 or event['awayTeam']['type'] != 1:
         print(f"Ignorando torneio não ATP/Challenger: {tournament_category}")
         return
 
