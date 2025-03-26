@@ -42,8 +42,8 @@ async def process_game(session, event):
     current_set = point_data["pointByPoint"][0]
     current_game = current_set["games"][0]
 
-    if not current_game:
-        print(f"Jogo {game_slug} sem game atual disponível.")
+    if not current_game or not current_game.get("points"):
+        print(f"Jogo {game_slug} sem pontos disponíveis no game atual.")
         return
 
     current_game_number = current_game["game"]
@@ -52,23 +52,17 @@ async def process_game(session, event):
     server_name = home_name if serving == 1 else away_name
     receiver_name = away_name if serving == 1 else home_name
 
-    points = current_game.get("points", [])
+    points = current_game["points"]
+
+    home_point = points[0]["homePoint"]
+    away_point = points[0]["awayPoint"]
 
     sacador_perdeu_primeiro_ponto = (
-        len(points) >= 1 and (
-            (serving == 1 and points[0]["homePoint"] == "0") or
-            (serving == 2 and points[0]["awayPoint"] == "0")
-        )
+        (serving == 1 and home_point == "0") or
+        (serving == 2 and away_point == "0")
     )
 
-    sacador_perdeu_segundo_ponto = (
-        len(points) >= 2 and (
-            (serving == 1 and points[1]["homePoint"] == "0") or
-            (serving == 2 and points[1]["awayPoint"] == "0")
-        )
-    )
-
-    if sacador_perdeu_primeiro_ponto and len(points) == 1 and not current_set.get("tieBreak"):
+    if sacador_perdeu_primeiro_ponto and len(points) == 1 and current_set.get("tieBreak") != True:
         if games_notifications.get(event_id) != current_game_number:
             message = (f"⚠️ {server_name} perdeu o primeiro ponto sacando contra "
                        f"{receiver_name} ({game_slug}, game {current_game_number}).")
@@ -77,42 +71,29 @@ async def process_game(session, event):
             print(f"Notificação enviada: {message}")
             games_notifications[event_id] = current_game_number
 
-    game_completed = "scoring" in current_game["score"] and current_game["score"]["scoring"] != -1
+    if sacador_perdeu_primeiro_ponto and len(points) >= 2:
+        second_point = points[1]
+        home_second_point = second_point["homePoint"]
+        away_second_point = second_point["awayPoint"]
 
-    if sacador_perdeu_primeiro_ponto and sacador_perdeu_segundo_ponto:
-        if game_completed:
-            if games_notifications.get(f"completed_{event_id}") != current_game_number:
-                winner = current_game["score"]["scoring"]
-                emoji = "✅" if winner == serving else "❌"
+        sacador_perdeu_segundo_ponto = (
+            (serving == 1 and home_second_point == "0") or
+            (serving == 2 and away_second_point == "0")
+        )
 
-                if winner == serving:
-                    message = f"{emoji} {server_name} venceu o game de saque ({game_slug}, game {current_game_number})."
-                else:
-                    message = f"{emoji} {server_name} perdeu o game de saque ({game_slug}, game {current_game_number})."
+        if sacador_perdeu_segundo_ponto:
+            if "scoring" in current_game["score"] and current_game["score"]["scoring"] != -1:
+                if games_notifications.get(f"completed_{event_id}") != current_game_number:
+                    winner = current_game["score"]["scoring"]
+                    emoji = "✅" if winner == serving else "❌"
+                    if winner == serving:
+                        message = f"{emoji} {server_name} venceu o game de saque ({game_slug}, game {current_game_number})."
+                    else:
+                        message = f"{emoji} {server_name} perdeu o game de saque ({game_slug}, game {current_game_number})."
 
-                await bot.send_message(chat_id=CHAT_ID, text=message)
-                print(f"Notificação enviada: {message}")
-                games_notifications[f"completed_{event_id}"] = current_game_number
-
-    if event['status']['type'] == 'finished':
-        final_set = point_data["pointByPoint"][0]
-        final_game = final_set["games"][0]
-        final_game_number = final_game["game"]
-
-        if games_notifications.get(f"completed_{event_id}") != final_game_number:
-            winner = final_game["score"]["scoring"]
-            serving = final_game["score"]["serving"]
-            server_name = home_name if serving == 1 else away_name
-            emoji = "✅" if winner == serving else "❌"
-
-            if winner == serving:
-                message = f"{emoji} {server_name} venceu o último game de saque ({game_slug}, game {final_game_number})."
-            else:
-                message = f"{emoji} {server_name} perdeu o último game de saque ({game_slug}, game {final_game_number})."
-
-            await bot.send_message(chat_id=CHAT_ID, text=message)
-            print(f"Notificação enviada (fim do jogo): {message}")
-            games_notifications[f"completed_{event_id}"] = final_game_number
+                    await bot.send_message(chat_id=CHAT_ID, text=message)
+                    print(f"Notificação enviada: {message}")
+                    games_notifications[f"completed_{event_id}"] = current_game_number
 
 async def monitor_all_games():
     await bot.send_message(chat_id=CHAT_ID, text="✅ Bot iniciado corretamente e enviando notificações!")
